@@ -1,0 +1,16 @@
+_min_copier_version: "9.0.0"
+_subdirectory: "{{ project_slug }}"
+project_name:
+  type: str
+  help: Human-readable project name
+project_slug:
+  type: str
+  help: Python/distribution slug (e.g. my-app)
+  default: "{{ project_name|lower|replace(' ', '-') }}"
+package_slug:
+  type: str
+  help: Importable package name
+  default: "{{ project_slug.replace('-', '_') }}"
+description:
+  type: str
+  default: "AI/agent project"

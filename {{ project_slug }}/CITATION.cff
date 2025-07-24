@@ -1,0 +1,7 @@
+cff-version: 1.2.0
+title: "{{ project_name }}"
+authors:
+  - family-names: "Richley"
+    given-names: "Jeff"
+date-released: 2025-01-01
+version: 0.1.0

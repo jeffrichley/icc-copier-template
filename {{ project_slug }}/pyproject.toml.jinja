@@ -1,0 +1,29 @@
+[project]
+name = "{{ project_slug }}"
+version = "0.1.0"
+description = "{{ description }}"
+authors = [ { name = "Jeff Richley", email = "jeffrichley@gmail.com" } ]
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2",
+  "typer",
+  "rich",
+  "pyyaml",
+]
+[project.optional-dependencies]
+dev = [
+  "black",
+  "ruff",
+  "mypy",
+  "pytest",
+  "pytest-cov",
+  "pytest-asyncio",
+  "pre-commit",
+  "commitizen",
+  "pip-audit",
+  "vulture",
+]
+[tool.black]
+line-length = 88
+[tool.ruff]
+line-length = 88

@@ -1,0 +1,11 @@
+def test_smoke_success():
+    assert True
+
+def test_smoke_edge():
+    assert 1 + 1 == 2
+
+def test_smoke_failure():
+    try:
+        raise ValueError("failure mode")
+    except ValueError:
+        assert True
