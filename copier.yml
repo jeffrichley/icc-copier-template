@@ -14,3 +14,5 @@ package_slug:
 description:
   type: str
   default: "AI/agent project"
+_exclude:
+  - QUICKSTART.md
