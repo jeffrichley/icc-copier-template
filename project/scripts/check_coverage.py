@@ -19,7 +19,7 @@ def run_coverage_check() -> bool:
                 "uv",
                 "run",
                 "pytest",
-                "--cov=src/lily",
+                "--cov=src/{{ package_slug }}",
                 "--cov-report=term-missing",
                 "--cov-fail-under=80",
                 "tests/",
