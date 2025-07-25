@@ -1,26 +1,145 @@
-.PHONY: format lint test checkit coverage-check
+# Use bash & fail fast
+SHELL := /bin/bash
+.SHELLFLAGS := -eu -o pipefail -c
 
-format: ## Format code
-	uv run black .
-	uv run ruff check . --fix
+# -------------------------------------------------------------------
+# Variables
+# -------------------------------------------------------------------
+PY          := uv run
+PKG         := {{ package_slug }}
+SRC_DIR     := src/$(PKG)
+TEST_DIR    := tests
+COV_MIN     := 80
+DOCS_DIR    := docs
+SPHINX_HTML := $(DOCS_DIR)/_build/html
+API_DOCS    := $(DOCS_DIR)/api
+PYPROJECT   := pyproject.toml
 
-lint: ## Lint code
-	uv run ruff check .
+# Default goal
+.DEFAULT_GOAL := help
 
-test: ## Run tests
-	uv run pytest tests/ -v
+# List of phony targets
+.PHONY: help quickstart bootstrap install-hooks format lint type test test-cov checkit \
+        coverage-check audit security clean pristine docs serve-docs docs-open \
+        changelog release bump cz-bump tag push-tags
 
-checkit: ## Run lint, tests, coverage check
-	make format
-	make lint
-	make test
-	uv run python scripts/check_coverage.py
+# -------------------------------------------------------------------
+# Help
+# -------------------------------------------------------------------
+help: ## Show this help
+	@awk 'BEGIN {FS = ":.*##"; printf "\n\033[1mAvailable targets:\033[0m\n"} /^[a-zA-Z0-9][^:]*:.*?##/ { printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-coverage-check: ## Run coverage check only
-	uv run python scripts/check_coverage.py
+# -------------------------------------------------------------------
+# Bootstrap & Quickstart
+# -------------------------------------------------------------------
+quickstart: ## One-shot: install deps, init git, install hooks, run quality gate
+	@echo ">>> Setting up project with uv, git, hooks, and quality checks..."
+	uv sync --extra dev
+	@if [ ! -d .git ]; then \
+		git init; \
+		git add .; \
+		git commit -m "chore: initial commit from icc-copier-template"; \
+	fi
+	$(PY) pre-commit install
+	$(MAKE) checkit
+	@echo ">>> Project ready!"
 
+bootstrap: quickstart ## Alias: same as quickstart
 
-docs:
-	uv run sphinx-build -b html docs/ docs/_build/html
-serve-docs:
-	uv run mkdocs serve
+install-hooks: ## Install pre-commit hooks
+	$(PY) pre-commit install
+
+# -------------------------------------------------------------------
+# Code Quality
+# -------------------------------------------------------------------
+format: ## Format code (Black + Ruff --fix)
+	$(PY) black .
+	$(PY) ruff check . --fix
+
+lint: ## Lint (Ruff)
+	$(PY) ruff check .
+
+type: ## Type check (mypy)
+	$(PY) mypy $(SRC_DIR) $(TEST_DIR)
+
+test: ## Run tests (pytest -q)
+	$(PY) pytest -q
+
+test-cov: ## Run tests with coverage report (respects pyproject thresholds)
+	$(PY) pytest \
+		--cov=$(SRC_DIR) \
+		--cov-report=term-missing \
+		--cov-report=html \
+		--cov-report=xml \
+		--cov-fail-under=$(COV_MIN)
+
+checkit: ## Full local quality gate: format, lint, type, tests, coverage, audit
+	$(MAKE) format
+	$(MAKE) lint
+	$(MAKE) type
+	$(MAKE) test
+	$(PY) python scripts/check_coverage.py
+	$(MAKE) audit
+
+coverage-check: ## Only run the coverage gate script
+	$(PY) python scripts/check_coverage.py
+
+audit: ## Dependency vulnerability scan (pip-audit)
+	$(PY) pip-audit || (echo "pip-audit found vulnerabilities" && exit 1)
+
+security: ## Run optional security tools if present (gitleaks, bandit)
+	@if command -v gitleaks >/dev/null 2>&1; then gitleaks detect --no-git -v; else echo "gitleaks not installed, skipping"; fi
+	@if command -v bandit >/dev/null 2>&1; then bandit -r $(SRC_DIR) -q; else echo "bandit not installed, skipping"; fi
+
+# -------------------------------------------------------------------
+# Docs
+# -------------------------------------------------------------------
+docs: ## Build Sphinx API docs & HTML (and MkDocs site)
+	$(PY) sphinx-apidoc -o $(API_DOCS) $(SRC_DIR)
+	$(PY) sphinx-build -b html $(DOCS_DIR) $(SPHINX_HTML)
+	$(PY) mkdocs build
+
+serve-docs: ## Serve MkDocs locally with live reload
+	$(PY) mkdocs serve
+
+docs-open: docs ## Build docs then open Sphinx HTML in browser (macOS open)
+	open $(SPHINX_HTML)/index.html || true
+
+# -------------------------------------------------------------------
+# Release / Versioning
+# -------------------------------------------------------------------
+changelog: ## Regenerate CHANGELOG.md with Commitizen
+	$(PY) cz changelog
+
+cz-bump: ## Bump version & tag with Commitizen (interactive)
+	$(PY) cz bump
+
+bump: cz-bump ## Alias
+
+tag: ## Ensure a git tag exists for current version
+	@echo "Use 'make cz-bump' instead to properly tag using Commitizen."
+
+push-tags: ## Push tags to remote
+	git push --follow-tags
+
+release: ## Full release flow: cz bump -> push tags (CI should publish)
+	$(MAKE) cz-bump
+	$(MAKE) push-tags
+
+# -------------------------------------------------------------------
+# Clean
+# -------------------------------------------------------------------
+clean: ## Clean caches & build artifacts
+	rm -rf \
+		.pytest_cache \
+		.mypy_cache \
+		.ruff_cache \
+		.coverage \
+		htmlcov \
+		coverage.xml \
+		$(SPHINX_HTML) \
+		$(API_DOCS) \
+		site
+
+pristine: clean ## Clean and re-sync dependencies
+	uv sync --extra dev
